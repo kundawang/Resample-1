@@ -37,6 +37,33 @@ func main() {
 }
 ```
 
+### Planar (per-channel) input
+
+When each channel is a separate PCM stream, pass one `io.Reader` per channel
+to `ReadFromChannels` instead of reading the whole recording into memory.
+Readers are consumed in bounded chunks, interleaved on the fly and resampled
+through the same pipeline; the output is interleaved PCM.
+
+```go
+left, _ := os.Open("./left.raw")
+right, _ := os.Open("./right.raw")
+output, _ := os.Create("./resampled.raw")
+
+res, _ := resample.New(output, resample.FormatInt16, 48000, 16000, 2)
+// Shorter channels are padded with silence instead of being rejected.
+_, _ = res.ReadFromChannels(
+	[]io.Reader{left, right},
+	resample.WithSilencePadding(),
+)
+```
+
+- Unequal channel lengths are rejected by default; `WithSilencePadding` pads
+  the shorter channels with silence.
+- A stream ending in the middle of a sample returns `ErrPartialSample`;
+  a reader stuck returning zero bytes returns `ErrNoProgress`.
+- Memory stays bounded regardless of the recording length or the per-channel
+  read chunk size (`WithPlanarChunkSize`), which never changes the output.
+
 ## Benchmarks
 
 ### Precision
